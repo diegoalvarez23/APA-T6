@@ -254,7 +254,7 @@ funcionamiento de su función.
 
 ##### Ejecución de los tests unitarios de `alumno.py`
 
-![Ejecución de los tests unitarios de alumno.py](img/test_alumno.png)
+![Ejecución de los tests unitarios de alumno.py](test_alumno.png)
 
 ##### Código desarrollado
 
