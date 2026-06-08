@@ -5,7 +5,7 @@
 > [!Important]
 > Introduzca a continuación su nombre y apellidos:
 >
-> Fulano Mengano Zutano
+> Diego Alvarez Tome
 
 ## Aviso Importante
 
@@ -254,15 +254,294 @@ funcionamiento de su función.
 
 ##### Ejecución de los tests unitarios de `alumno.py`
 
-Inserte a continuación una captura de pantalla que muestre el resultado de ejecutar el
-fichero `alumno.py` con la opción *verbosa*, de manera que se muestre el
-resultado de la ejecución de los tests unitarios.
+![Ejecución de los tests unitarios de alumno.py](img/test_alumno.png)
 
 ##### Código desarrollado
 
-Inserte a continuación los códigos fuente desarrollados en esta tarea, usando los
-comandos necesarios para que se realice el realce sintáctico en Python del mismo (no
-vale insertar una imagen o una captura de pantalla, debe hacerse en formato *markdown*).
+```python
+
+import doctest
+import re
+
+
+class Alumno:
+    """
+    Clase usada para el tratamiento de las notas de los alumnos.
+    """
+
+    def __init__(self, nombre, numIden=-1, notas=None):
+        if notas is None:
+            notas = []
+
+        self.numIden = numIden
+        self.nombre = nombre
+        self.notas = [nota for nota in notas]
+
+    def __add__(self, other):
+        """
+        Devuelve un nuevo objeto Alumno con una lista de notas ampliada.
+        """
+        return Alumno(self.nombre, self.numIden, self.notas + [other])
+
+    def media(self):
+        """
+        Devuelve la nota media del alumno.
+        """
+        return sum(self.notas) / len(self.notas) if self.notas else 0
+
+    def __repr__(self):
+        """
+        Devuelve la representación oficial del alumno.
+        """
+        return f'Alumno("{self.nombre}", {self.numIden!r}, {self.notas!r})'
+
+    def __str__(self):
+        """
+        Devuelve la representación bonita del alumno.
+        """
+        return f'{self.numIden}\t{self.nombre}\t{self.media():.1f}'
+
+
+def leeAlumnos(ficAlum):
+    """
+    Lee un fichero de alumnos y devuelve un diccionario.
+
+    La clave del diccionario es el nombre completo del alumno.
+
+    >>> alumnos = leeAlumnos('alumnos.txt')
+    >>> for alumno in alumnos:
+    ...     print(alumnos[alumno])
+    171     Blanca Agirrebarrenetse 9.5
+    23      Carles Balcells de Lara 4.9
+    68      David Garcia Fuster     7.0
+    """
+    alumnos = {}
+
+    patron = re.compile(
+        r"^\s*"
+        r"(?P<num_iden>\d+)"
+        r"\s+"
+        r"(?P<nombre>[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]+?)"
+        r"\s+"
+        r"(?P<notas>\d+(?:\.\d+)?(?:\s+\d+(?:\.\d+)?)*)"
+        r"\s*$"
+    )
+
+    with open(ficAlum, encoding="utf-8") as fichero:
+        for linea in fichero:
+            resultado = patron.match(linea)
+
+            if resultado:
+                num_iden = int(resultado.group("num_iden"))
+                nombre = resultado.group("nombre").strip()
+                notas = [
+                    float(nota)
+                    for nota in resultado.group("notas").split()
+                ]
+
+                alumnos[nombre] = Alumno(nombre, num_iden, notas)
+
+    return alumnos
+
+
+if __name__ == "__main__":
+    doctest.testmod(optionflags=doctest.NORMALIZE_WHITESPACE, verbose=True)
+```
+
+
+```python
+
+import re
+
+
+def _periodo_a_24(hora, periodo):
+    """
+    Convierte una hora de 12 horas a 24 horas según el periodo indicado.
+    """
+    if periodo is None:
+        return hora % 12
+
+    if periodo == "mañana":
+        return hora if 4 <= hora <= 11 else None
+
+    if periodo == "mediodía":
+        return 12 if hora == 12 else None
+
+    if periodo == "tarde":
+        return hora + 12 if 3 <= hora <= 8 else None
+
+    if periodo == "noche":
+        if hora == 12:
+            return 0
+        if 8 <= hora <= 11:
+            return hora + 12
+        return None
+
+    if periodo == "madrugada":
+        if hora == 12:
+            return 0
+        if 1 <= hora <= 6:
+            return hora
+        return None
+
+    return None
+
+
+def _normaliza_colon(match):
+    """
+    Normaliza expresiones del tipo 8:05 o 18:30.
+    """
+    hora = int(match.group("hora"))
+    minuto = int(match.group("minuto"))
+
+    if 0 <= hora <= 23 and 0 <= minuto <= 59:
+        return f"{hora:02d}:{minuto:02d}"
+
+    return match.group(0)
+
+
+def _normaliza_hm(match):
+    """
+    Normaliza expresiones del tipo 8h, 8h27m o 7h de la mañana.
+    """
+    hora = int(match.group("hora"))
+    minuto_txt = match.group("minuto")
+    minuto = int(minuto_txt) if minuto_txt is not None else 0
+    periodo = match.group("periodo1") or match.group("periodo2")
+
+    if not 0 <= minuto <= 59:
+        return match.group(0)
+
+    if periodo:
+        if not 1 <= hora <= 12:
+            return match.group(0)
+
+        hora_24 = _periodo_a_24(hora, periodo)
+
+        if hora_24 is None:
+            return match.group(0)
+
+        return f"{hora_24:02d}:{minuto:02d}"
+
+    if 0 <= hora <= 23:
+        return f"{hora:02d}:{minuto:02d}"
+
+    return match.group(0)
+
+
+def _normaliza_texto(match):
+    """
+    Normaliza expresiones como 8 en punto, 8 y media o 8 menos cuarto.
+    """
+    hora = int(match.group("hora"))
+    expresion = match.group("expr")
+    periodo = match.group("periodo1") or match.group("periodo2")
+
+    if not 1 <= hora <= 12:
+        return match.group(0)
+
+    if expresion == "en punto":
+        minuto = 0
+        hora_base = hora
+    elif expresion == "y cuarto":
+        minuto = 15
+        hora_base = hora
+    elif expresion == "y media":
+        minuto = 30
+        hora_base = hora
+    elif expresion == "menos cuarto":
+        minuto = 45
+        hora_base = 12 if hora == 1 else hora - 1
+    else:
+        return match.group(0)
+
+    hora_24 = _periodo_a_24(hora_base, periodo)
+
+    if hora_24 is None:
+        return match.group(0)
+
+    return f"{hora_24:02d}:{minuto:02d}"
+
+
+def _normaliza_periodo(match):
+    """
+    Normaliza expresiones como 12 de la noche o 6 de la tarde.
+    """
+    hora = int(match.group("hora"))
+    periodo = match.group("periodo1") or match.group("periodo2")
+
+    if not 1 <= hora <= 12:
+        return match.group(0)
+
+    hora_24 = _periodo_a_24(hora, periodo)
+
+    if hora_24 is None:
+        return match.group(0)
+
+    return f"{hora_24:02d}:00"
+
+
+def _normaliza_linea(linea):
+    """
+    Normaliza todas las expresiones horarias de una línea.
+    """
+    patron_colon = re.compile(
+        r"(?<![\w:])(?P<hora>\d{1,2}):(?P<minuto>\d{2})(?![\w:])"
+    )
+
+    patron_hm = re.compile(
+        r"(?<!\w)"
+        r"(?P<hora>\d{1,2})h"
+        r"(?:(?P<minuto>\d{1,2})m)?"
+        r"(?!\w)"
+        r"(?:"
+        r"\s+de\s+la\s+(?P<periodo1>mañana|tarde|noche|madrugada)"
+        r"|"
+        r"\s+del\s+(?P<periodo2>mediodía)"
+        r")?"
+    )
+
+    patron_texto = re.compile(
+        r"(?<!\w)"
+        r"(?P<hora>\d{1,2})\s+"
+        r"(?P<expr>en punto|y cuarto|y media|menos cuarto)"
+        r"(?:"
+        r"\s+de\s+la\s+(?P<periodo1>mañana|tarde|noche|madrugada)"
+        r"|"
+        r"\s+del\s+(?P<periodo2>mediodía)"
+        r")?"
+        r"(?!\w)"
+    )
+
+    patron_periodo = re.compile(
+        r"(?<!\w)"
+        r"(?P<hora>\d{1,2})"
+        r"(?:"
+        r"\s+de\s+la\s+(?P<periodo1>mañana|tarde|noche|madrugada)"
+        r"|"
+        r"\s+del\s+(?P<periodo2>mediodía)"
+        r")"
+        r"(?!\w)"
+    )
+
+    linea = patron_colon.sub(_normaliza_colon, linea)
+    linea = patron_hm.sub(_normaliza_hm, linea)
+    linea = patron_texto.sub(_normaliza_texto, linea)
+    linea = patron_periodo.sub(_normaliza_periodo, linea)
+
+    return linea
+
+
+def normalizaHoras(ficText, ficNorm):
+    """
+    Lee ficText, normaliza sus expresiones horarias y escribe ficNorm.
+    """
+    with open(ficText, encoding="utf-8") as entrada, open(
+        ficNorm, "w", encoding="utf-8"
+    ) as salida:
+        for linea in entrada:
+            salida.write(_normaliza_linea(linea))
+```
 
 ##### Subida del resultado al repositorio GitHub y *pull-request*
 
